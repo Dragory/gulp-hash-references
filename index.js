@@ -1,56 +1,113 @@
 var es = require('event-stream'),
-	Stream = require('stream'),
-	fs = require('fs'),
-	gutil = require('gulp-util');
-
-var defaultOptions = {
-	ignoreNotFound: false
-};
-
-function extend() {
-	var args = Array.prototype.slice.call(arguments),
-		target = args.shift(),
-		sources = args,
-		i, len;
-
-	for (i = 0, len = sources.length; i < len; i++) {
-		for (var prop in sources[i]) {
-			if (! sources[i].hasOwnProperty(prop)) continue;
-			target[prop] = sources[i][prop];
-		}
-	}
-
-	return target;
-}
+	extend = require('lodash.assign'),
+	Promise = require('bluebird');
 
 // http://stackoverflow.com/a/9310752/316944
 function regexEscape(str) {
 	return str.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
 }
 
-module.exports = function(mappingFilePath, userOptions) {
-	if (typeof userOptions === 'undefined') userOptions = {};
+/**
+ * Handled target files will be queued to the returned stream once the manifest files are parsed.
+ */
+module.exports = function(targetFiles) {
+	var mappings = {},
+		resolver;
 
-	var options = extend({}, defaultOptions, userOptions),
-		mappings,
-		mappingFroms = [],
-		mappingTos = [],
-		i, len;
+	var targetFileHandlerPromise = new Promise(function(resolve) {
+		resolver = resolve;
+	});
 
-	// Load mappings from the file
-	try {
-		mappings = JSON.parse(fs.readFileSync(mappingFilePath));
-	} catch (e) {
-		if (! options.ignoreNotFound) {
-			throw new gutil.PluginError('gulp-hash-references', 'Mapping file could not be found or read!');
+	var stream = es.through(
+		function(manifestFile) {
+			var parser = es.through(function(contents) {
+				mappings = extend(mappings, JSON.parse(contents));
+			});
+
+			manifestFile.pipe(parser);
+			// Don't return, we will queue the target files after handling instead
+		},
+
+		function() {
+			var mappingPatterns = {
+				from: [],
+				to: []
+			};
+
+			for (var from in mappings) {
+				mappingPatterns.from.push(new RegExp(regexEscape(from), 'g'));
+				mappingPatterns.to.push(mappings[from]);
+			}
+
+			resolver(mappingPatterns);
 		}
-	}
+	);
+	
+	targetFiles.pipe(es.map(function(targetFile, callback) {
+		// Wait for the manifest files to be parsed
+		targetFileHandlerPromise.then(function(mappingPatterns) {
+			var replacer = es.through(function(data) {
+				var strData = data.toString(),
+					i, len;
 
-	// Create regex objects from the mapping keys for a global replace
-	for (var from in mappings) {
-		mappingFroms.push(new RegExp(regexEscape(from), 'g'));
-		mappingTos.push(mappings[from]);
-	}
+				// Apply each mapping replacement to the file's contents
+				for (i = 0, len = mappingPatterns.from.length; i < len; i++) {
+					strData = strData.replace(mappingPatterns.from[i], mappingPatterns.to[i]);
+				}
+
+				if (targetFile.isBuffer()) {
+					targetFile.contents = new Buffer(strData);
+					stream.queue(targetFile);
+				} else {
+					targetFile.contents = es.through();
+					stream.queue(targetFile);
+
+					targetFile.contents.write(new Buffer(strData));
+					targetFile.contents.end();
+				}
+
+			});
+
+			targetFile.pipe(replacer);
+
+			callback();
+		});
+	}));
+
+	return stream;
+};
+
+/*module.exports = function(manifestFiles) {
+	// We need to load the mappings from the manifests before we can perform any replacements
+	var manifestLoadPromise = new Promise(function(resolve) {
+		var mappings = {};
+
+		manifestFiles.pipe(es.through(
+			// Load manifest files
+			function(file) {
+				var parseStream = es.through(function(data) {
+					mappings = extend(mappings, JSON.parse(data));
+				});
+
+				file.pipe(parseStream);
+			},
+
+			// Separate them into 'from' (a regex pattern) and 'to' (the replacement string)
+			function() {
+				var mappingPatterns = {
+					from: [],
+					to: []
+				};
+
+				for (var from in mappings) {
+					mappingPatterns.from.push(new RegExp(regexEscape(from), 'g'));
+					mappingPatterns.to.push(mappings[from]);
+				}
+
+				resolve(mappingPatterns);
+			}
+		));
+	});
 
 	return es.map(function(file, callback) {
 		if (file.isNull()) {
@@ -58,27 +115,26 @@ module.exports = function(mappingFilePath, userOptions) {
 			return;
 		}
 
-		var rewriteStream = new Stream.Transform({objectMode: true});
-		rewriteStream._transform = function(data, encoding, callback) {
-			var strData = data.toString(),
-				i, len;
+		manifestLoadPromise.then(function(mappingPatterns) {
+			file.pipe(es.through(
+				// Perform each replacement on the file
+				function(data) {
+					var strData = data.toString(),
+						i, len;
 
-			// Apply each mapping replacement to the file's contents
-			for (i = 0, len = mappingFroms.length; i < len; i++) {
-				strData = strData.replace(mappingFroms[i], mappingTos[i]);
-			}
+					// Apply each mapping replacement to the file's contents
+					for (i = 0, len = mappingPatterns.from.length; i < len; i++) {
+						strData = strData.replace(mappingPatterns.from[i], mappingPatterns.to[i]);
+					}
 
-			this.push(new Buffer(strData));
-		};
+					file.contents = new Buffer(strData);
+				},
 
-		file.pipe(rewriteStream);
-
-		if (file.isBuffer()) {
-			file.contents = new Buffer(rewriteStream.read());
-		} else {
-			file.contents = rewriteStream;
-		}
-
-		callback(null, file);
+				// Pass the replacement result along in the stream
+				function() {
+					callback(null, file);
+				}
+			));
+		});
 	});
-};
+};*/

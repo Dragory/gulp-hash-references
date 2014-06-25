@@ -1,32 +1,38 @@
-var File = require('vinyl'),
+var File = require('gulp-util').File,
+	vfs = require('vinyl-fs'),
+	es = require('event-stream'),
 	references = require('../index.js'),
 	assert = require('assert'),
 	Stream = require('stream');
 
-describe('buffer contents', function() {
+it('should replace file references in buffer content', function(done) {
 	var fakeFile = new File({
 		'path': '',
 		'contents': new Buffer('<img src="dir/img.png" alt="">')
 	});
 
-	var testReferences = references(__dirname + '/fixtures/asset-hashes.json');
+	var fakeFileStream = es.through();
 
-	it('should replace file path', function(done) {
-		var testStream = new Stream.Writable();
-		testStream._write = function(contents) {
-			assert.equal(contents.toString(), '<img src="dir/img.12345678.png" alt="">');
-			done();
-		};
+	var testStream = vfs.src(__dirname + '/fixtures/asset-hashes.json')
+		.pipe(references(fakeFileStream))
+		.pipe(es.through(function(modifiedFile) {
+			var contentReader = es.through(function(contents) {
+				assert.equal(contents, '<img src="dir/img.12345678.png" alt="">');
+				done();
+			});
+			
+			modifiedFile.pipe(contentReader);
+		}));
 
-		testReferences.write(fakeFile);
-		fakeFile.pipe(testStream);
-	});
+	fakeFileStream.write(fakeFile);
+	fakeFileStream.end();
 });
 
-describe('stream contents', function() {
+it('should replace file references in stream content', function(done) {
 	var readable = new Stream.Readable();
 	readable._read = function() {
 		this.push(new Buffer('<img src="dir/img.png" alt="">'));
+		this.push(null);
 	};
 
 	var fakeFile = new File({
@@ -34,38 +40,19 @@ describe('stream contents', function() {
 		'contents': readable
 	});
 
-	var testReferences = references(__dirname + '/fixtures/asset-hashes.json');
+	var fakeFileStream = es.through();
 
-	it('should replace file path', function(done) {
-		var testStream = new Stream.Writable();
-		testStream._write = function(contents) {
-			assert.equal(contents.toString(), '<img src="dir/img.12345678.png" alt="">');
-			done();
-		};
-
-		testReferences.write(fakeFile);
-		fakeFile.pipe(testStream);
-	});
-});
-
-describe('error handling', function() {
-	it('should respect the ignoreNotFound option', function() {
-		try {
-			references(__dirname + '/non-existent.json', {
-				ignoreNotFound: true
+	var testStream = vfs.src(__dirname + '/fixtures/asset-hashes.json')
+		.pipe(references(fakeFileStream))
+		.pipe(es.through(function(modifiedFile) {
+			var contentReader = es.through(function(contents) {
+				assert.equal(contents, '<img src="dir/img.12345678.png" alt="">');
+				done();
 			});
-			assert(true);
-		} catch (e) {
-			assert(false);
-		}
+			
+			modifiedFile.pipe(contentReader);
+		}));
 
-		try {
-			references(__dirname + '/non-existent.json', {
-				ignoreNotFound: false
-			});
-			assert(false);
-		} catch (e) {
-			assert(true);
-		}
-	});
+	fakeFileStream.write(fakeFile);
+	fakeFileStream.end();
 });
