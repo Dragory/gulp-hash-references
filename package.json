@@ -1,0 +1,29 @@
+{
+  "name": "gulp-hash-references",
+  "version": "1.0.0",
+  "description": "Replaces references (paths) to files according to the specified mapping file.",
+  "keywords": [
+    "cache",
+    "cachebust",
+    "cache bust",
+    "gulpplugin"
+  ],
+  "author": {
+    "name": "Miikka Virtanen",
+    "email": "contact@mivir.fi"
+  },
+  "homepage": "https://github.com/Dragory/gulp-hash-references",
+  "repository": {
+    "type": "git",
+    "url": "git@github.com:Dragory/gulp-hash-references.git"
+  },
+  "main": "./index.js",
+  "dependencies": {
+    "event-stream": "^3.1.5",
+    "gulp-util": "^2.2.17"
+  },
+  "devDependencies": {
+    "vinyl": "^0.2.3",
+    "mocha": "^1.20.1"
+  }
+}
