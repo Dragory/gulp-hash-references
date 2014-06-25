@@ -53,6 +53,11 @@ module.exports = function(mappingFilePath, userOptions) {
 	}
 
 	return es.map(function(file, callback) {
+		if (file.isNull()) {
+			callback(null, file);
+			return;
+		}
+
 		var rewriteStream = new Stream.Transform({objectMode: true});
 		rewriteStream._transform = function(data, encoding, callback) {
 			var strData = data.toString(),
