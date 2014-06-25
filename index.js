@@ -42,7 +42,7 @@ module.exports = function(mappingFilePath, userOptions) {
 		mappings = JSON.parse(fs.readFileSync(mappingFilePath));
 	} catch (e) {
 		if (! options.ignoreNotFound) {
-			throw new gutil.PluginError('gulp-hash-rewrite', 'Mapping file could not be found or read!');
+			throw new gutil.PluginError('gulp-hash-references', 'Mapping file could not be found or read!');
 		}
 	}
 
