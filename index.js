@@ -55,7 +55,7 @@ module.exports = function(targetFiles) {
 		
 		// All target files should now be handled and passed to the original stream; thus, we can end it.
 		// This also needs to be done for certain modules (such as run-sequence) to notice we've handled each file.
-		stream.end();
+		stream.queue(null);
 	}
 
 	targetFiles
