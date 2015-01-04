@@ -17,7 +17,7 @@ module.exports = function(targetFiles, options) {
 		},
 		resolver;
 
-	options = extend(options || {}, defaults)
+	options = extend(defaults, options || {})
 
 	var targetFileHandlerPromise = new Promise(function(resolve) {
 		resolver = resolve;
