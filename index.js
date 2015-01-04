@@ -10,9 +10,13 @@ function regexEscape(str) {
 /**
  * Handled target files will be queued to the returned stream once the manifest files are parsed.
  */
-module.exports = function(targetFiles) {
+module.exports = function(targetFiles, options) {
 	var mappings = {},
 		resolver;
+	
+	if(!options.dereference){
+	        options.dereference = false;
+	}
 
 	var targetFileHandlerPromise = new Promise(function(resolve) {
 		resolver = resolve;
@@ -73,10 +77,19 @@ module.exports = function(targetFiles) {
 					var replacer = es.through(function(data) {
 						var strData = data.toString(),
 							i, len;
+						
+						
+					        var substr = mappingPatterns.from[i];
+					        var newSubStr = mappingPatterns.to[i];
+					        
+						if(options.dereference) {
+						        substr = mappingPatterns.to[i];
+						        newSubStr = mappingPatterns.from[i];
+						}
 
 						// Apply each mapping replacement to the file's contents
 						for (i = 0, len = mappingPatterns.from.length; i < len; i++) {
-							strData = strData.replace(mappingPatterns.from[i], mappingPatterns.to[i]);
+							strData = strData.replace(substr, newSubStr);
 						}
 
 						if (targetFile.isBuffer()) {
