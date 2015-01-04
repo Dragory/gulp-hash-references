@@ -10,9 +10,14 @@ function regexEscape(str) {
 /**
  * Handled target files will be queued to the returned stream once the manifest files are parsed.
  */
-module.exports = function(targetFiles) {
+module.exports = function(targetFiles, options) {
 	var mappings = {},
+		defaults = {
+			dereference: false
+		},
 		resolver;
+
+	options = extend(options || {}, defaults)
 
 	var targetFileHandlerPromise = new Promise(function(resolve) {
 		resolver = resolve;
@@ -35,6 +40,12 @@ module.exports = function(targetFiles) {
 			};
 
 			for (var from in mappings) {
+				if (options.dereference) {
+					mappingPatterns.from.push(mappings[from]);
+					mappingPatterns.to.push(new RegExp(regexEscape(from), 'g'));
+					continue;
+				}
+
 				mappingPatterns.from.push(new RegExp(regexEscape(from), 'g'));
 				mappingPatterns.to.push(mappings[from]);
 			}
@@ -52,7 +63,7 @@ module.exports = function(targetFiles) {
 
 	function finish() {
 		if (! hasEnded || handled < totalTargetFiles) return;
-		
+
 		// All target files should now be handled and passed to the original stream; thus, we can end it.
 		// This also needs to be done for certain modules (such as run-sequence) to notice we've handled each file.
 		stream.queue(null);
