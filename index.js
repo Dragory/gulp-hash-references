@@ -41,8 +41,8 @@ module.exports = function(targetFiles, options) {
 
 			for (var from in mappings) {
 				if (options.dereference) {
-					mappingPatterns.from.push(mappings[from]);
-					mappingPatterns.to.push(new RegExp(regexEscape(from), 'g'));
+					mappingPatterns.from.push(new RegExp(regexEscape(mappings[from]), 'g'));
+					mappingPatterns.to.push(from);
 					continue;
 				}
 
