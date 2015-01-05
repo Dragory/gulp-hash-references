@@ -56,3 +56,32 @@ it('should replace file references in stream content', function(done) {
 	fakeFileStream.write(fakeFile);
 	fakeFileStream.end();
 });
+
+it('should dereference', function(done) {
+	var readable = new Stream.Readable();
+	readable._read = function() {
+		this.push(new Buffer('<img src="dir/img.12345678.png" alt="">'));
+		this.push(null);
+	};
+
+	var fakeFile = new File({
+		'path': '',
+		'contents': readable
+	});
+
+	var fakeFileStream = es.through();
+
+	var testStream = vfs.src(__dirname + '/fixtures/asset-hashes.json')
+		.pipe(references(fakeFileStream, {dereference: true}))
+		.pipe(es.through(function(modifiedFile) {
+			var contentReader = es.through(function(contents) {
+				assert.equal(contents, '<img src="dir/img.png" alt="">');
+				done();
+			});
+			
+			modifiedFile.pipe(contentReader);
+		}));
+
+	fakeFileStream.write(fakeFile);
+	fakeFileStream.end();
+});
