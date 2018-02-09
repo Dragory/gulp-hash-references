@@ -34,23 +34,32 @@ module.exports = function(targetFiles, options) {
 		},
 
 		function() {
-			var mappingPatterns = {
-				from: [],
-				to: []
-			};
-
+			var mappingsArr = [];
 			for (var from in mappings) {
 				if (options.dereference) {
-					mappingPatterns.from.push(new RegExp(regexEscape(mappings[from]), 'g'));
-					mappingPatterns.to.push(from);
+					mappingsArr.push({
+						originalFrom: from,
+						from: new RegExp(regexEscape(mappings[from]), 'g'),
+						to: from
+					});
+
 					continue;
 				}
 
-				mappingPatterns.from.push(new RegExp(regexEscape(from), 'g'));
-				mappingPatterns.to.push(mappings[from]);
+				mappingsArr.push({
+					originalFrom: from,
+					from: new RegExp(regexEscape(from), 'g'),
+					to: mappings[from]
+				});
 			}
 
-			resolver(mappingPatterns);
+			mappingsArr.sort(function(a, b) {
+				if (a.originalFrom.length > b.originalFrom.length) return -1;
+				if (a.originalFrom.length < b.originalFrom.length) return 1;
+				return 0;
+			});
+
+			resolver(mappingsArr);
 			// Don't end the stream; new files coming from below
 		}
 	);
@@ -79,15 +88,15 @@ module.exports = function(targetFiles, options) {
 		.pipe(es.through(
 			function(targetFile) {
 				// Wait for the manifest files to be parsed before doing anything
-				targetFileHandlerPromise.then(function(mappingPatterns) {
+				targetFileHandlerPromise.then(function(mappingsArr) {
 					// Vinyl .pipe() allows us to handle both stream and buffer contents
 					var replacer = es.through(function(data) {
 						var strData = data.toString(),
 							i, len;
 
 						// Apply each mapping replacement to the file's contents
-						for (i = 0, len = mappingPatterns.from.length; i < len; i++) {
-							strData = strData.replace(mappingPatterns.from[i], mappingPatterns.to[i]);
+						for (i = 0, len = mappingsArr.length; i < len; i++) {
+							strData = strData.replace(mappingsArr[i].from, mappingsArr[i].to);
 						}
 
 						if (targetFile.isBuffer()) {
