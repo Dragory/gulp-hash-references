@@ -1,6 +1,6 @@
 {
   "name": "gulp-hash-references",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Replaces references (paths) to files according to the specified mapping file.",
   "keywords": [
     "cache",
