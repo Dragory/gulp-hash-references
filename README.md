@@ -2,23 +2,45 @@
 Replaces references (paths) to files according to the specified mapping file.
 Designed to be used with [gulp-hash](https://github.com/Dragory/gulp-hash).
 
+## NOTE TO USERS UPGRADING FROM 1.x
+The API of the plugin has changed significantly.
+Files where the references are to be updated should now be piped to the plugin, with the first argument being the path to the manifest file.
+See updated usage examples and API below.
+
 ## Usage
 ```javascript
-var hash = require('gulp-hash'),
-	references = require('gulp-hash-references');
+var hash = require('gulp-hash');
+var references = require('gulp-hash-references');
 
-gulp.src('css/styles.css')
-	.pipe(hash()) // Generate a hash for styles.css and rename it
-	.pipe(gulp.dest('css')) // Save the renamed styles.css (now something like styles.abc123df.css)
-	.pipe(hash.manifest('style-manifest.json')) // Retrieve the generated manifest for styles.css with an optional filename for saving
-	.pipe(gulp.dest('.')) // Save the manifest file (optional)
-	.pipe(references(gulp.src('index.html'))) // Pipe the manifest and pass a gulp.src of files to update references in (only index.html in this example)
-	.pipe(gulp.dest('.')); // Save the updated index.html
+gulp.task('styles', function() {
+	return gulp.src('styles/**/*.css')
+		.pipe(hash()) // Generate hashes for the CSS files
+		.pipe(gulp.dest('dist')) // Save the renamed CSS files (e.g. style.123456.css)
+		.pipe(hash.manifest('asset-manifest.json')) // Generate a manifest file
+		.pipe(gulp.dest('.')); // Save the manifest file
+});
+
+gulp.task('update-references', function() {
+	return gulp.src('index.html')
+		.pipe(references('asset-manifest.json')) // Replace file paths in index.html according to the manifest
+		.pipe(gulp.dest('.'));
+});
 ```
 
-You can also generate the manifest file(s) in advance and then just:
-```javascript
-gulp.src('asset-manifests/**/*.json')
-	.pipe(references(gulp.src('index.html')))
-	.pipe(gulp.dest('.'));
-```
+## API
+
+### references(manifestPath[, options])
+
+#### manifestPath
+Type: `String` or `String[]`
+
+Path to the manifest file, or an array of paths if using multiple manifest files.
+
+#### options
+Type: `Object`
+
+##### options.dereference
+Type: `boolean`  
+Default: `false`
+
+If set to true, the plugin's functionality is reversed and the replaced file paths are reverted to the original path instead.

@@ -1,6 +1,5 @@
-var es = require('event-stream'),
-	extend = require('lodash.assign'),
-	Promise = require('bluebird');
+var through = require('through2');
+var fs = require('fs');
 
 // http://stackoverflow.com/a/9310752/316944
 function regexEscape(str) {
@@ -8,131 +7,91 @@ function regexEscape(str) {
 }
 
 /**
- * Handled target files will be queued to the returned stream once the manifest files are parsed.
+ * Load file name mappings from the specified file and return them as
+ * an array of objects with 'from' and 'to' properties. The source file
+ * should be a JSON file containing an object where the keys correspond
+ * to the 'from' and the values to the 'to' of the mappings.
+ *
+ * If the file doesn't exist, returns an empty array.
+ *
+ * If reverse is set to true, the from/to of the mappings are reversed.
+ *
+ * @param {String} manifestFilePath
+ * @param {Boolean} reverse
+ * @return {Object[]}
  */
-module.exports = function(targetFiles, options) {
-	var mappings = {},
-		defaults = {
-			dereference: false
-		},
-		resolver;
-
-	options = extend(defaults, options || {})
-
-	var targetFileHandlerPromise = new Promise(function(resolve) {
-		resolver = resolve;
-	});
-
-	var stream = es.through(
-		function(manifestFile) {
-			var parser = es.through(function(contents) {
-				mappings = extend(mappings, JSON.parse(contents));
-			});
-
-			manifestFile.pipe(parser);
-			// Don't return, we will queue the target files after handling instead
-		},
-
-		function() {
-			var mappingsArr = [];
-			for (var from in mappings) {
-				if (options.dereference) {
-					mappingsArr.push({
-						originalFrom: from,
-						from: new RegExp(regexEscape(mappings[from]), 'g'),
-						to: from
-					});
-
-					continue;
-				}
-
-				mappingsArr.push({
-					originalFrom: from,
-					from: new RegExp(regexEscape(from), 'g'),
-					to: mappings[from]
-				});
-			}
-
-			mappingsArr.sort(function(a, b) {
-				if (a.originalFrom.length > b.originalFrom.length) return -1;
-				if (a.originalFrom.length < b.originalFrom.length) return 1;
-				return 0;
-			});
-
-			resolver(mappingsArr);
-			// Don't end the stream; new files coming from below
-		}
-	);
-
-	// Some trickery to accomodate for two streams ending in async (original manifest files and targetFiles)
-	// (There has to be a better way...)
-	var totalTargetFiles = 0,
-		handled = 0,
-		hasEnded = false;
-
-	function finish() {
-		if (! hasEnded || handled < totalTargetFiles) return;
-
-		// All target files should now be handled and passed to the original stream; thus, we can end it.
-		// This also needs to be done for certain modules (such as run-sequence) to notice we've handled each file.
-		stream.queue(null);
+function loadMappings(manifestFilePath, reverse) {
+	try {
+		var mappingsFile = fs.readFileSync(manifestFilePath, { encoding: 'utf8' });
+	} catch (e) {
+		return [];
 	}
 
-	targetFiles
-		// Keep a count of how many files we receive
-		.pipe(es.through(function(file) {
-			totalTargetFiles++;
-			this.queue(file);
-		}))
-		// Handle the files
-		.pipe(es.through(
-			function(targetFile) {
-				// Wait for the manifest files to be parsed before doing anything
-				targetFileHandlerPromise.then(function(mappingsArr) {
-					// Vinyl .pipe() allows us to handle both stream and buffer contents
-					var replacer = es.through(function(data) {
-						var strData = data.toString(),
-							i, len;
+	var parsed = JSON.parse(mappingsFile);
+	var mappings = [];
 
-						// Apply each mapping replacement to the file's contents
-						for (i = 0, len = mappingsArr.length; i < len; i++) {
-							strData = strData.replace(mappingsArr[i].from, mappingsArr[i].to);
-						}
+	for (var from in parsed) {
+		var originalFrom = from;
+		var to = parsed[from];
 
-						if (targetFile.isBuffer()) {
-							// For buffer files, just save the contents as a buffer
-							targetFile.contents = new Buffer(strData);
-							stream.queue(targetFile);
-						} else {
-							// For stream files, pass a new stream as the contents
-							targetFile.contents = es.through();
-							stream.queue(targetFile);
+		if (reverse) {
+			to = from;
+			from = parsed[from];
+		}
 
-							targetFile.contents.write(new Buffer(strData));
-							targetFile.contents.queue(null);
-						}
+		mappings.push({
+			originalFrom: originalFrom,
+			from: new RegExp(regexEscape(from), 'g'),
+			to: to
+		});
+	}
 
-						// Mark this file as handled
-						handled++;
-						finish();
-					});
+	return mappings;
+}
 
-					if (! targetFile.isNull()) {
-						targetFile.pipe(replacer);
-					} else {
-						// Ignore null files
-						handled++;
-						finish();
-					}
-				});
-			},
+/**
+ * The exported main function of the plugin
+ * @param {String|String[]} manifestFiles
+ * @param {Object} options
+ */
+function references(manifestFiles, options) {
+	var defaultOpts = {
+		dereference: false
+	};
 
-			function() {
-				// Keep track of when we've attached the promise listener above to each of the files
-				hasEnded = true;
-				finish();
-			}
-		));
+	options = Object.assign({}, defaultOpts, options || {});
 
-	return stream;
+	// Load mappings
+	if (typeof manifestFiles === 'string') manifestFiles = [manifestFiles];
+	var mappings = manifestFiles.reduce(function(mappings, path) {
+		return mappings.concat(loadMappings(path, options.dereference));
+	}, []);
+
+	var replaceReferences = function (str) {
+		mappings.forEach(obj => {
+			str = str.replace(obj.from, obj.to);
+		});
+
+		return str;
+	};
+
+	// Replace references in each file
+	return through.obj(function(file, enc, cb) {
+		if (file.isStream()) {
+			var oldContents = file.contents;
+			file.contents = through();
+
+			oldContents.pipe(through(function(contents) {
+				var replaced = replaceReferences(contents.toString('utf8'));
+				file.contents.write(replaced);
+				file.contents.push(null);
+			}));
+		} else {
+			file.contents = new Buffer(replaceReferences(file.contents.toString('utf8')));
+		}
+
+		cb(null, file);
+	});
 };
+
+module.exports = references;
