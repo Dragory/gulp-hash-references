@@ -27,6 +27,10 @@ gulp.task('update-references', function() {
 });
 ```
 
+## Streaming
+This plugin does not support streaming.
+Please convert streaming vinyl files to buffers first using something like [vinyl-buffer](https://www.npmjs.com/package/vinyl-buffer).
+
 ## API
 
 ### references(manifestPath[, options])

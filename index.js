@@ -78,18 +78,11 @@ function references(manifestFiles, options) {
 	// Replace references in each file
 	return through.obj(function(file, enc, cb) {
 		if (file.isStream()) {
-			var oldContents = file.contents;
-			file.contents = through();
-
-			oldContents.pipe(through(function(contents) {
-				var replaced = replaceReferences(contents.toString('utf8'));
-				file.contents.write(replaced);
-				file.contents.push(null);
-			}));
-		} else {
-			file.contents = new Buffer(replaceReferences(file.contents.toString('utf8')));
+			cb(Error('Streaming is not supported'));
+			return;
 		}
 
+		file.contents = new Buffer(replaceReferences(file.contents.toString('utf8')));
 		cb(null, file);
 	});
 };
