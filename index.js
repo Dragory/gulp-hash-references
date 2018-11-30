@@ -31,7 +31,6 @@ function loadMappings(manifestFilePath, reverse) {
 	var mappings = [];
 
 	for (var from in parsed) {
-		var originalFrom = from;
 		var to = parsed[from];
 
 		if (reverse) {
@@ -40,11 +39,17 @@ function loadMappings(manifestFilePath, reverse) {
 		}
 
 		mappings.push({
-			originalFrom: originalFrom,
+			originalFrom: from,
 			from: new RegExp(regexEscape(from), 'g'),
 			to: to
 		});
 	}
+
+	mappings.sort(function(a, b) {
+		if (a.originalFrom.length > b.originalFrom.length) return -1;
+		if (a.originalFrom.length < b.originalFrom.length) return 1;
+		return 0;
+	});
 
 	return mappings;
 }

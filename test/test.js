@@ -108,3 +108,22 @@ it('should replace references from multiple manifests', function (done) {
 	fakeFileStream.write(fakeFile);
 	fakeFileStream.push(null);
 });
+
+it('should replace longer references first', function (done) {
+	var fakeFile = new Vinyl({
+		path: '',
+		contents: new Buffer('dir/img.png dir/img.png.bak')
+	});
+
+	var fakeFileStream = through.obj();
+
+	fakeFileStream
+		.pipe(references(__dirname + '/fixtures/asset-hashes.json'))
+		.pipe(through.obj(function (file) {
+			assert.equal(file.contents.toString('utf8'), 'dir/img.12345678.png dir/img.87654321.png.bak');
+			done();
+		}));
+
+	fakeFileStream.write(fakeFile);
+	fakeFileStream.push(null);
+});

@@ -1,3 +1,4 @@
 {
-	"dir/img.png": "dir/img.12345678.png"
+	"dir/img.png": "dir/img.12345678.png",
+	"dir/img.png.bak": "dir/img.87654321.png.bak"
 }
