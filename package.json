@@ -18,6 +18,9 @@
     "url": "git@github.com:Dragory/gulp-hash-references.git"
   },
   "main": "./index.js",
+  "scripts": {
+    "test": "mocha ./test"
+  },
   "dependencies": {
     "through2": "^3.0.0"
   },
